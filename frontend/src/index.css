@@ -1,0 +1,17 @@
+/* Import Leaflet styles for react-leaflet */
+@import "leaflet/dist/leaflet.css";
+
+/* Optional: basic styles for your app */
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f6f6f6;
+}
+header {
+  background: #388e3c;
+  color: white;
+  padding: 1rem;
+  font-size: 1.5rem;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
