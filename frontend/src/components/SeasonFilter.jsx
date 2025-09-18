@@ -1,53 +1,58 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function SeasonFilter({ onSeasonChange }) {
-  const [seasons, setSeasons] = useState([]);
-  const [selectedSeason, setSelectedSeason] = useState('all');
-  const [loading, setLoading] = useState(true);
-
+const SeasonFilter = ({ onSeasonChange }) => {
+  const [seasons, setSeasons] = useState(['all', 'summer', 'monsoon', 'winter']);
+  const [selected, setSelected] = useState('all');
+  
   useEffect(() => {
-    // Fetch available seasons
+    // Fetch available seasons from API
     fetch('/api/places/seasons')
       .then(res => res.json())
       .then(data => {
-        setSeasons(['all', ...data]);
-        setLoading(false);
+        if (data && data.length) {
+          if (!data.includes('all')) {
+            data.unshift('all');
+          }
+          setSeasons(data);
+        }
       })
-      .catch(err => {
-        console.error("Error fetching seasons:", err);
-        setLoading(false);
-      });
+      .catch(err => console.error('Error fetching seasons:', err));
   }, []);
-
-  const handleSeasonChange = (e) => {
-    const season = e.target.value;
-    setSelectedSeason(season);
-    onSeasonChange(season);
+  
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setSelected(value);
+    onSeasonChange(value);
   };
-
-  if (loading) return <div>Loading seasons...</div>;
-
+  
   return (
-    <div className="season-filter">
-      <label htmlFor="season-select">
-        <b>Filter by Season:</b>
-        <select
-          id="season-select"
-          value={selectedSeason}
-          onChange={handleSeasonChange}
-          style={{ 
-            marginLeft: "0.5rem", 
-            padding: "2px 8px", 
-            borderRadius: "4px" 
-          }}
-        >
-          {seasons.map(season => (
-            <option key={season} value={season}>
-              {season.charAt(0).toUpperCase() + season.slice(1)}
-            </option>
-          ))}
-        </select>
-      </label>
+    <div>
+      <select
+        value={selected}
+        onChange={handleChange}
+        style={{
+          padding: "8px 12px",
+          borderRadius: "6px",
+          border: "1px solid #ddd",
+          backgroundColor: "#f5f7fa",
+          fontSize: "14px",
+          cursor: "pointer",
+          minWidth: "120px",
+          appearance: "none",
+          backgroundImage: "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"6\"><path d=\"M0 0 L12 0 L6 6 Z\" fill=\"%23666\"/></svg>')",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "right 10px center",
+          paddingRight: "30px"
+        }}
+      >
+        {seasons.map((season) => (
+          <option key={season} value={season}>
+            {season === 'all' ? 'All Seasons' : season.charAt(0).toUpperCase() + season.slice(1)}
+          </option>
+        ))}
+      </select>
     </div>
   );
-}
+};
+
+export default SeasonFilter;
