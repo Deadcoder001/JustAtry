@@ -186,8 +186,9 @@ const places = [
     id: 30,
     name: "Assam State Zoo",
     description: "One of the largest zoos in Northeast India with various endangered species including one-horned rhinoceros.",
-    latitude: 26.1817,
-    longitude: 91.7963,
+    latitude: 26.16390229260916,
+    longitude: 91.78140655463093,
+
     season: "winter",
     image: "https://images.unsplash.com/photo-1552084117-56a987666449",
     state: "Assam",

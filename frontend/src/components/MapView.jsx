@@ -132,8 +132,7 @@ function LocationSearch({ onLocationSelected }) {
   return (
     <div style={{
       position: 'relative',
-      width: '100%',
-      maxWidth: '400px'
+      width: '100%'
     }}>
       <div style={{
         display: 'flex',
@@ -147,23 +146,28 @@ function LocationSearch({ onLocationSelected }) {
           onKeyDown={handleKeyDown}
           style={{
             flex: 1,
-            padding: '8px 12px',
-            borderRadius: '4px',
-            border: '1px solid #ccc',
-            fontSize: '14px'
+            padding: '12px 16px',
+            borderRadius: '8px',
+            border: '1px solid #e0e0e0',
+            fontSize: '14px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+            outline: 'none',
+            transition: 'all 0.2s ease'
           }}
         />
         <button
           onClick={searchLocation}
           disabled={searching || !query.trim()}
           style={{
-            padding: '8px 16px',
+            padding: '0 16px',
             backgroundColor: '#3498db',
             color: 'white',
             border: 'none',
-            borderRadius: '4px',
+            borderRadius: '8px',
             cursor: searching || !query.trim() ? 'not-allowed' : 'pointer',
-            opacity: searching || !query.trim() ? 0.7 : 1
+            opacity: searching || !query.trim() ? 0.7 : 1,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
           }}
         >
           {searching ? 'Searching...' : 'Search'}
@@ -174,7 +178,10 @@ function LocationSearch({ onLocationSelected }) {
         <div style={{
           color: '#e74c3c',
           fontSize: '14px',
-          marginTop: '8px'
+          marginTop: '8px',
+          padding: '8px 12px',
+          borderRadius: '6px',
+          backgroundColor: 'rgba(231, 76, 60, 0.1)'
         }}>
           {error}
         </div>
@@ -187,9 +194,9 @@ function LocationSearch({ onLocationSelected }) {
           left: 0,
           right: 0,
           backgroundColor: 'white',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-          borderRadius: '4px',
-          marginTop: '4px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          borderRadius: '8px',
+          marginTop: '8px',
           zIndex: 1000,
           maxHeight: '300px',
           overflowY: 'auto'
@@ -199,13 +206,14 @@ function LocationSearch({ onLocationSelected }) {
               key={result.place_id}
               onClick={() => handleResultClick(result)}
               style={{
-                padding: '10px 16px',
-                borderBottom: '1px solid #eee',
+                padding: '12px 16px',
+                borderBottom: '1px solid #f0f0f0',
                 cursor: 'pointer',
-                fontSize: '14px'
+                fontSize: '14px',
+                transition: 'background-color 0.15s ease'
               }}
               onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#f5f5f5';
+                e.currentTarget.style.backgroundColor = '#f9f9f9';
               }}
               onMouseOut={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
@@ -249,6 +257,9 @@ export default function MapView() {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [nearbyHotels, setNearbyHotels] = useState([]);
   const [hotelSearchLoading, setHotelSearchLoading] = useState(false);
+  
+  // Route preference state
+  const [routePreference, setRoutePreference] = useState('fastest'); // 'fastest' or 'shortest'
   
   // Request GPS location
   const requestGPS = () => {
@@ -330,11 +341,16 @@ export default function MapView() {
       const profile = transportMode === 'foot-walking' ? 'foot' : 
                       transportMode === 'cycling-regular' ? 'bike' : 'car';
       
-      console.log(`Getting ${profile} directions from [${userLoc[0]}, ${userLoc[1]}] to [${place.latitude}, ${place.longitude}]`);
+      console.log(`Getting ${routePreference} ${profile} directions from [${userLoc[0]}, ${userLoc[1]}] to [${place.latitude}, ${place.longitude}]`);
       
       // Format: /route/v1/{profile}/{coordinates}?options
       const coordinates = `${userLoc[1]},${userLoc[0]};${place.longitude},${place.latitude}`;
-      const response = await fetch(`https://router.project-osrm.org/route/v1/${profile}/${coordinates}?overview=full&geometries=polyline`);
+      
+      // Add weight parameter for shortest route
+      const weightParam = routePreference === 'shortest' ? '&weight=distance' : '';
+      const url = `https://router.project-osrm.org/route/v1/${profile}/${coordinates}?overview=full&geometries=polyline${weightParam}`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`OSRM API returned ${response.status} ${response.statusText}`);
@@ -353,7 +369,8 @@ export default function MapView() {
         
         setTravelInfo({
           duration: formatDuration(duration),
-          distance: (distance / 1000).toFixed(1)
+          distance: (distance / 1000).toFixed(1),
+          preference: routePreference // Add preference to the info
         });
       } else {
         // If OSRM fails, try OpenRouteService as fallback
@@ -385,7 +402,8 @@ export default function MapView() {
             [place.longitude, place.latitude]
           ],
           format: 'geojson',
-          instructions: true
+          instructions: true,
+          preference: routePreference // Add preference parameter
         })
       });
       
@@ -404,7 +422,8 @@ export default function MapView() {
         
         setTravelInfo({
           duration: formatDuration(duration),
-          distance: (distance / 1000).toFixed(1)
+          distance: (distance / 1000).toFixed(1),
+          preference: routePreference // Add preference to the info
         });
       } else {
         setRouteError("No route found for this journey");
@@ -457,6 +476,7 @@ export default function MapView() {
     setDestination(null);
     setTravelInfo(null);
     setRouteError(null);
+    setRouteLoading(false); // Add this line to reset loading state
   };
 
   // Format seconds to hours and minutes
@@ -562,6 +582,23 @@ export default function MapView() {
     }
   };
 
+  // Function to open directions in Google Maps
+  const openInGoogleMaps = (origin, destination, travelMode) => {
+    // Convert OpenRouteService travel modes to Google Maps travel modes
+    const googleTravelMode = 
+      travelMode === 'foot-walking' ? 'walking' : 
+      travelMode === 'cycling-regular' ? 'bicycling' : 
+      'driving';
+    
+    // Format the Google Maps directions URL
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin[0]},${origin[1]}&destination=${destination.latitude},${destination.longitude}&travelmode=${googleTravelMode}`;
+    
+    console.log(`Opening Google Maps directions: ${url}`);
+    
+    // Open in browser using the dev container's browser command
+    openExternalLink(url);
+  };
+
   // Helper function to open external links
   const openExternalLink = (url) => {
     // Using the proper browser command for the dev container
@@ -617,7 +654,8 @@ export default function MapView() {
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 1000,
           display: 'flex',
           justifyContent: 'center',
@@ -625,13 +663,20 @@ export default function MapView() {
         }}>
           <div style={{
             backgroundColor: 'white',
-            padding: '24px',
-            borderRadius: '8px',
+            padding: '28px',
+            borderRadius: '16px',
             width: '90%',
-            maxWidth: '500px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+            maxWidth: '460px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.12)'
           }}>
-            <h2 style={{ marginTop: 0, marginBottom: '24px', textAlign: 'center' }}>
+            <h2 style={{ 
+              marginTop: 0, 
+              marginBottom: '28px', 
+              textAlign: 'center',
+              fontSize: '22px',
+              fontWeight: '600',
+              color: '#2c3e50'
+            }}>
               Choose Your Starting Location
             </h2>
             
@@ -644,17 +689,20 @@ export default function MapView() {
                 onClick={requestGPS}
                 disabled={gpsStatus === "requesting"}
                 style={{
-                  padding: '12px',
+                  padding: '14px',
                   backgroundColor: '#2ecc71',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '4px',
+                  borderRadius: '10px',
                   fontSize: '16px',
+                  fontWeight: '500',
                   cursor: gpsStatus === "requesting" ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '10px',
+                  boxShadow: '0 2px 8px rgba(46, 204, 113, 0.3)',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 <span role="img" aria-label="GPS icon" style={{ fontSize: '20px' }}>📍</span>
@@ -663,15 +711,23 @@ export default function MapView() {
               
               <div style={{
                 textAlign: 'center',
-                margin: '8px 0',
+                margin: '4px 0',
                 fontSize: '14px',
-                color: '#7f8c8d'
+                color: '#94a3b8'
               }}>
-                - OR -
+                or
               </div>
               
               <div>
-                <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Search for a location</h3>
+                <h3 style={{ 
+                  marginTop: 0, 
+                  marginBottom: '12px',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  color: '#2c3e50'
+                }}>
+                  Search for a location
+                </h3>
                 <LocationSearch onLocationSelected={handleLocationSelected} />
               </div>
               
@@ -686,8 +742,17 @@ export default function MapView() {
                     background: 'none',
                     border: 'none',
                     color: '#3498db',
-                    textDecoration: 'underline',
-                    cursor: 'pointer'
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
                   Use default Meghalaya location
@@ -700,156 +765,239 @@ export default function MapView() {
       
       {/* Filters section */}
       <div style={{
-        padding: "1rem",
+        padding: "14px 16px",
         background: "#fff",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
         display: "flex",
-        gap: "1rem",
+        gap: "12px",
         alignItems: "center",
-        flexWrap: "wrap"
+        flexWrap: "wrap",
+        borderBottom: "1px solid #f1f1f1"
       }}>
         <SeasonFilter onSeasonChange={setSelectedSeason} />
         
         {/* Add search input */}
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ 
+          display: "flex", 
+          gap: "6px", 
+          alignItems: "center",
+          flex: 1,
+          maxWidth: "320px"
+        }}>
           <input
             type="text"
-            placeholder="Search places or locations..."
+            placeholder="Search places..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             style={{ 
-              padding: "6px 10px", 
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              width: "200px"
+              padding: "8px 12px", 
+              borderRadius: "8px",
+              border: "1px solid #e0e0e0",
+              width: "100%",
+              fontSize: "14px",
+              outline: "none",
+              transition: "border-color 0.2s ease"
             }}
           />
           <button
             onClick={handleSearch}
             style={{
-              padding: "6px 12px",
+              padding: "8px 12px",
               background: "#3498db",
               color: "white",
               border: "none",
-              borderRadius: "4px",
-              cursor: "pointer"
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "14px",
+              whiteSpace: "nowrap",
+              boxShadow: "0 2px 4px rgba(52, 152, 219, 0.2)",
+              transition: "all 0.2s ease"
             }}
           >
             Search
           </button>
         </div>
         
-        <label>
-          <b>Radius:</b>
-          <select
-            style={{ marginLeft: "0.5rem", padding: "2px 8px", borderRadius: "4px" }}
-            value={radius}
-            onChange={e => setRadius(Number(e.target.value))}
-          >
-            <option value={5}>5 km</option>
-            <option value={10}>10 km</option>
-            <option value={20}>20 km</option>
-            <option value={50}>50 km</option>
-          </select>
-        </label>
-        
-        <label>
-          <b>Transport:</b>
-          <select
-            style={{ marginLeft: "0.5rem", padding: "2px 8px", borderRadius: "4px" }}
-            value={transportMode}
-            onChange={e => setTransportMode(e.target.value)}
-            disabled={!userLoc}
-          >
-            <option value="driving-car">Car</option>
-            <option value="foot-walking">Walking</option>
-            <option value="cycling-regular">Cycling</option>
-          </select>
-        </label>
+        <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <label style={{ fontSize: "14px", fontWeight: "500", color: "#4a5568", marginRight: "8px" }}>
+              Radius:
+            </label>
+            <select
+              style={{ 
+                padding: "6px 12px", 
+                borderRadius: "8px", 
+                border: "1px solid #e0e0e0",
+                fontSize: "14px",
+                outline: "none",
+                backgroundColor: "white"
+              }}
+              value={radius}
+              onChange={e => setRadius(Number(e.target.value))}
+            >
+              <option value={5}>5 km</option>
+              <option value={10}>10 km</option>
+              <option value={20}>20 km</option>
+              <option value={50}>50 km</option>
+            </select>
+          </div>
+          
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <label style={{ fontSize: "14px", fontWeight: "500", color: "#4a5568", marginRight: "8px" }}>
+              Transport:
+            </label>
+            <select
+              style={{ 
+                padding: "6px 12px", 
+                borderRadius: "8px", 
+                border: "1px solid #e0e0e0",
+                fontSize: "14px",
+                outline: "none",
+                backgroundColor: "white",
+                color: !userLoc ? "#a0aec0" : "#4a5568"
+              }}
+              value={transportMode}
+              onChange={e => setTransportMode(e.target.value)}
+              disabled={!userLoc}
+            >
+              <option value="driving-car">Car</option>
+              <option value="foot-walking">Walking</option>
+              <option value="cycling-regular">Cycling</option>
+            </select>
+          </div>
+        </div>
         
         {userLoc && (
           <button
             onClick={resetLocation}
             style={{
-              padding: "4px 8px",
-              backgroundColor: "#f0f0f0",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
+              padding: "6px 12px",
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "4px",
-              fontSize: "13px"
+              gap: "6px",
+              fontSize: "14px",
+              color: "#64748b",
+              transition: "all 0.2s ease"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#f1f5f9";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#f8fafc";
             }}
           >
             <span role="img" aria-label="Change location">📍</span>
             Change Location
           </button>
         )}
-        
-        {routeError && (
-          <div style={{ 
-            marginLeft: "auto",
-            background: "#ffebee",
-            padding: "5px 10px",
-            borderRadius: "4px",
-            border: "1px solid #ffcdd2",
-            color: "#c62828"
-          }}>
-            {routeError} 
-            <button 
-              onClick={() => getOSRMDirections(destination)}
-              style={{
-                marginLeft: "8px",
-                background: "#c62828",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                padding: "2px 8px",
-                cursor: "pointer"
-              }}
-            >
-              Try alternative
-            </button>
-          </div>
-        )}
-        
-        {destination && !routeError && (
-          <div style={{ 
-            marginLeft: "auto",
-            display: "flex", 
-            alignItems: "center", 
-            background: "#e3f2fd", 
-            padding: "5px 10px", 
-            borderRadius: "4px",
-            border: "1px solid #bbdefb"
-          }}>
-            <div>
-              <span style={{ fontWeight: "bold" }}>Route to: {destination.name}</span>
-              {travelInfo && (
-                <span style={{ marginLeft: "10px", fontSize: "0.9em" }}>
-                  ({travelInfo.distance} km, {travelInfo.duration})
-                </span>
-              )}
-            </div>
-            <button 
-              onClick={clearRoute}
-              style={{
-                marginLeft: "10px",
-                background: "#bbdefb",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                padding: "2px 8px",
-                cursor: "pointer"
-              }}
-            >
-              Clear
-            </button>
-          </div>
-        )}
       </div>
+      
+      {/* Route info banner */}
+      {(routeError || (destination && !routeError)) && (
+        <div style={{
+          padding: "10px 16px",
+          backgroundColor: routeError ? "#fef2f2" : "#f0f9ff",
+          borderBottom: `1px solid ${routeError ? "#fee2e2" : "#e0f2fe"}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: "14px"
+        }}>
+          {routeError ? (
+            <>
+              <div style={{ 
+                color: "#b91c1c",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {routeError}
+              </div>
+              <button 
+                onClick={() => tryOpenRouteService(destination)}
+                style={{
+                  background: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                Try alternative
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <span style={{ fontWeight: "500", color: "#0369a1" }}>Route to: {destination.name}</span>
+                {travelInfo && (
+                  <span style={{ marginLeft: "10px", color: "#0c4a6e" }}>
+                    ({travelInfo.distance} km, {travelInfo.duration}
+                    <span style={{ 
+                      fontSize: "12px", 
+                      backgroundColor: "#e0f2fe", 
+                      padding: "2px 6px", 
+                      borderRadius: "4px", 
+                      marginLeft: "6px" 
+                    }}>
+                      {travelInfo.preference === "fastest" ? "Fastest route" : "Shortest route"}
+                    </span>)
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button 
+                  onClick={() => openInGoogleMaps(userLoc, destination, transportMode)}
+                  style={{
+                    background: "#047857", // Green color for "Start Trip"
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                  </svg>
+                  Start Trip
+                </button>
+                <button 
+                  onClick={clearRoute}
+                  style={{
+                    background: "#0ea5e9",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "6px 12px",
+                    cursor: "pointer",
+                    fontSize: "14px"
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       
       {/* Map */}
       {!userLoc && !showLocationSelector ? (
@@ -859,11 +1007,12 @@ export default function MapView() {
           justifyContent: "center",
           alignItems: "center",
           flexDirection: "column",
-          backgroundColor: "#f5f5f5"
+          backgroundColor: "#f8fafc"
         }}>
           <div style={{
-            fontSize: "20px",
-            marginBottom: "16px"
+            fontSize: "18px",
+            marginBottom: "24px",
+            color: "#475569"
           }}>
             Please select a location to view the map
           </div>
@@ -874,9 +1023,17 @@ export default function MapView() {
               backgroundColor: "#3498db",
               color: "white",
               border: "none",
-              borderRadius: "4px",
+              borderRadius: "10px",
               fontSize: "16px",
-              cursor: "pointer"
+              cursor: "pointer",
+              boxShadow: "0 4px 6px rgba(52, 152, 219, 0.2)",
+              transition: "transform 0.2s ease"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
             }}
           >
             Choose Location
@@ -897,16 +1054,20 @@ export default function MapView() {
           {userLoc && (
             <>
               <Marker position={userLoc} icon={userLocationIcon}>
-                <Popup>
-                  <b>Starting Location</b>
-                  <p style={{ margin: "4px 0" }}>{locationName}</p>
-                  <p style={{ margin: "4px 0", fontSize: "12px" }}>Coordinates: {userLoc[0].toFixed(4)}, {userLoc[1].toFixed(4)}</p>
+                <Popup className="custom-popup">
+                  <div style={{ padding: "4px 0" }}>
+                    <div style={{ fontWeight: "600", fontSize: "15px", marginBottom: "6px" }}>Starting Location</div>
+                    <div style={{ fontSize: "14px" }}>{locationName}</div>
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b" }}>
+                      Coordinates: {userLoc[0].toFixed(4)}, {userLoc[1].toFixed(4)}
+                    </div>
+                  </div>
                 </Popup>
               </Marker>
               <Circle
                 center={userLoc}
                 radius={radius * 1000}
-                pathOptions={{ color: "red", fillOpacity: 0.1 }}
+                pathOptions={{ color: "#ef4444", fillOpacity: 0.08, weight: 1, opacity: 0.6 }}
               />
             </>
           )}
@@ -914,38 +1075,72 @@ export default function MapView() {
           {filteredPlaces.map((p) => (
             <Marker key={p.id} position={[p.latitude, p.longitude]}>
               <Popup>
-                <div style={{ width: "200px" }}>
+                <div style={{ width: "240px", padding: "4px 0" }}>
                   <img
                     src={p.image}
                     alt={p.name}
-                    style={{ width: "100%", height: "100px", objectFit: "cover", borderRadius: "6px", marginBottom: "6px" }}
+                    style={{ 
+                      width: "100%", 
+                      height: "140px", 
+                      objectFit: "cover", 
+                      borderRadius: "10px", 
+                      marginBottom: "12px" 
+                    }}
                   />
-                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>{p.name}</div>
-                  <div style={{ fontSize: "0.95em", marginBottom: "4px" }}>{p.description}</div>
-                  <div style={{ fontSize: "0.85em", color: "#666", marginBottom: "8px" }}>
+                  <div style={{ 
+                    fontWeight: "600", 
+                    fontSize: "16px", 
+                    marginBottom: "8px",
+                    color: "#1e293b"
+                  }}>
+                    {p.name}
+                  </div>
+                  <div style={{ 
+                    fontSize: "14px", 
+                    marginBottom: "10px",
+                    color: "#475569",
+                    lineHeight: "1.4"
+                  }}>
+                    {p.description}
+                  </div>
+                  <div style={{ 
+                    fontSize: "13px", 
+                    color: "#64748b", 
+                    marginBottom: "12px",
+                    backgroundColor: "#f8fafc",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    display: "inline-block"
+                  }}>
                     <b>Best Season:</b> {p.season === 'all' ? 'All year' : p.season}
                   </div>
                   
                   <div style={{ 
                     display: "flex", 
                     justifyContent: "space-between",
-                    gap: "6px",
-                    marginBottom: "8px"
+                    gap: "8px",
+                    marginBottom: "10px"
                   }}>
                     <button 
                       onClick={() => handleFindHotels(p)}
                       style={{
-                        background: "#ff9800",
+                        background: "#f97316",
                         color: "white",
                         border: "none",
-                        borderRadius: "4px",
-                        padding: "4px 8px",
+                        borderRadius: "8px",
+                        padding: "8px 0",
                         cursor: "pointer",
-                        fontSize: "0.85em",
-                        flex: 1
+                        fontSize: "14px",
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
+                        transition: "all 0.2s ease"
                       }}
                     >
-                      <span role="img" aria-label="hotel" style={{marginRight: "4px"}}>🏨</span>
+                      <span role="img" aria-label="hotel">🏨</span>
                       Find Hotels
                     </button>
                     
@@ -954,26 +1149,49 @@ export default function MapView() {
                         onClick={() => getDirections(p)}
                         disabled={routeLoading}
                         style={{
-                          background: "#4caf50",
+                          background: "#10b981",
                           color: "white",
                           border: "none",
-                          borderRadius: "4px",
-                          padding: "4px 8px",
-                          cursor: "pointer",
-                          fontSize: "0.85em",
-                          flex: 1
+                          borderRadius: "8px",
+                          padding: "8px 0",
+                          cursor: routeLoading ? "wait" : "pointer",
+                          fontSize: "14px",
+                          flex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          opacity: routeLoading ? 0.7 : 1,
+                          boxShadow: "0 2px 4px rgba(16, 185, 129, 0.2)",
+                          transition: "all 0.2s ease"
                         }}
                       >
-                        {routeLoading ? "Loading..." : "Get Directions"}
+                        {routeLoading ? "Loading..." : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                            </svg>
+                            Directions
+                          </>
+                        )}
                       </button>
                     )}
                   </div>
                   
                   {userLoc && (
-                    <div style={{ fontSize: "0.85em" }}>
-                      <b>Distance:</b>{" "}
-                      {haversine(userLoc[0], userLoc[1], p.latitude, p.longitude).toFixed(1)}{" "}
-                      km
+                    <div style={{ 
+                      fontSize: "13px",
+                      color: "#64748b",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        <path d="M2 12h20"></path>
+                      </svg>
+                      <span><b>Distance:</b> {haversine(userLoc[0], userLoc[1], p.latitude, p.longitude).toFixed(1)} km</span>
                     </div>
                   )}
                 </div>
@@ -984,9 +1202,11 @@ export default function MapView() {
           {route && (
             <Polyline 
               positions={route} 
-              color="#2196f3"
+              color="#0ea5e9"
               weight={5}
               opacity={0.7}
+              lineCap="round"
+              lineJoin="round"
             />
           )}
           
@@ -1004,7 +1224,8 @@ export default function MapView() {
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 2000,
           display: 'flex',
           justifyContent: 'center',
@@ -1012,21 +1233,26 @@ export default function MapView() {
         }}>
           <div style={{
             backgroundColor: 'white',
-            borderRadius: '8px',
+            borderRadius: '16px',
             width: '90%',
             maxWidth: '500px',
-            maxHeight: '80vh',
+            maxHeight: '85vh',
             overflowY: 'auto',
-            padding: '20px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+            padding: '24px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.15)'
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: '16px'
+              marginBottom: '20px'
             }}>
-              <h2 style={{ margin: 0 }}>
+              <h2 style={{ 
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: '600',
+                color: '#1e293b'
+              }}>
                 Accommodations near {selectedPlace.name}
               </h2>
               <button
@@ -1035,7 +1261,21 @@ export default function MapView() {
                   background: 'none',
                   border: 'none',
                   fontSize: '24px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  transition: 'background-color 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f1f5f9';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 ×
@@ -1043,38 +1283,83 @@ export default function MapView() {
             </div>
             
             {hotelSearchLoading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '16px'
+              }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  border: '3px solid #e2e8f0',
+                  borderTopColor: '#3498db',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
                 <div>Searching for accommodations...</div>
-                <div style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-                  This may take a few moments
-                </div>
+                <style>{`
+                  @keyframes spin {
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
               </div>
             ) : (
               <>
                 {nearbyHotels.length > 0 ? (
                   <>
-                    <p>Found {nearbyHotels.length} accommodations near {selectedPlace.name}:</p>
+                    <p style={{ 
+                      margin: '0 0 16px 0',
+                      fontSize: '15px',
+                      color: '#475569'
+                    }}>
+                      Found {nearbyHotels.length} accommodations near {selectedPlace.name}:
+                    </p>
                     <div style={{ 
                       maxHeight: '300px', 
                       overflowY: 'auto',
-                      border: '1px solid #eee',
-                      borderRadius: '4px',
-                      marginBottom: '15px'
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      marginBottom: '20px'
                     }}>
                       {nearbyHotels.map((hotel, index) => (
                         <div key={index} style={{
-                          padding: '10px',
-                          borderBottom: index < nearbyHotels.length - 1 ? '1px solid #eee' : 'none',
+                          padding: '16px',
+                          borderBottom: index < nearbyHotels.length - 1 ? '1px solid #e2e8f0' : 'none',
                           display: 'flex',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          gap: '16px'
                         }}>
-                          <div style={{ marginRight: '10px', fontSize: '24px' }}>
+                          <div style={{ 
+                            fontSize: '28px',
+                            color: hotel.tags && hotel.tags.tourism === 'hostel' ? '#8b5cf6' : '#0ea5e9',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
                             {hotel.tags && hotel.tags.tourism === 'hostel' ? '🛏️' : '🏨'}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: 'bold' }}>{hotel.tags?.name || 'Unnamed Accommodation'}</div>
-                            <div style={{ fontSize: '14px', color: '#666' }}>
-                              {hotel.tags?.tourism === 'hostel' ? 'Hostel' : 'Hotel'} • 
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              fontWeight: '600',
+                              fontSize: '15px',
+                              color: '#1e293b',
+                              marginBottom: '4px'
+                            }}>
+                              {hotel.tags?.name || 'Unnamed Accommodation'}
+                            </div>
+                            <div style={{ 
+                              fontSize: '13px', 
+                              color: '#64748b',
+                              marginBottom: '8px'
+                            }}>
+                              {hotel.tags?.tourism === 'hostel' ? 'Hostel' : 
+                               hotel.tags?.tourism === 'guest_house' ? 'Guest House' :
+                               hotel.tags?.tourism === 'apartment' ? 'Apartment' : 
+                               hotel.tags?.tourism === 'resort' ? 'Resort' : 'Hotel'} • 
                               {hotel.tags?.['addr:street'] ? ` ${hotel.tags['addr:street']}` : ' No address available'}
                             </div>
                             <button
@@ -1082,13 +1367,20 @@ export default function MapView() {
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#4285F4',
-                                padding: '5px 0',
+                                color: '#3b82f6',
+                                padding: '4px 0',
                                 cursor: 'pointer',
-                                textDecoration: 'underline',
-                                fontSize: '14px'
+                                fontSize: '13px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
                               }}
                             >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                <polyline points="15 3 21 3 21 9"></polyline>
+                                <line x1="10" y1="14" x2="21" y2="3"></line>
+                              </svg>
                               View on OpenStreetMap
                             </button>
                           </div>
@@ -1097,24 +1389,34 @@ export default function MapView() {
                     </div>
                   </>
                 ) : (
-                  <p>No accommodations found in our database. Use these services to find places to stay:</p>
+                  <p style={{
+                    margin: '0 0 20px 0',
+                    fontSize: '15px',
+                    color: '#475569'
+                  }}>
+                    No accommodations found in our database. Use these services to find places to stay:
+                  </p>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <button
                     onClick={() => openExternalLink(`https://www.google.com/maps/search/hotels+near+${encodeURIComponent(selectedPlace.name)}/@${selectedPlace.latitude},${selectedPlace.longitude},14z`)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '12px',
+                      padding: '14px',
                       backgroundColor: '#4285F4',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      boxShadow: '0 2px 6px rgba(66, 133, 244, 0.3)',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    <span style={{ marginRight: '8px', fontSize: '20px' }}>🗺️</span>
+                    <span style={{ marginRight: '12px', fontSize: '20px' }}>🗺️</span>
                     Search on Google Maps
                   </button>
                   
@@ -1123,15 +1425,19 @@ export default function MapView() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '12px',
+                      padding: '14px',
                       backgroundColor: '#003580',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      boxShadow: '0 2px 6px rgba(0, 53, 128, 0.3)',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    <span style={{ marginRight: '8px', fontSize: '20px' }}>🏨</span>
+                    <span style={{ marginRight: '12px', fontSize: '20px' }}>🏨</span>
                     Search on Booking.com
                   </button>
                   
@@ -1140,15 +1446,19 @@ export default function MapView() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '12px',
+                      padding: '14px',
                       backgroundColor: '#FF5A5F',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      boxShadow: '0 2px 6px rgba(255, 90, 95, 0.3)',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    <span style={{ marginRight: '8px', fontSize: '20px' }}>🏠</span>
+                    <span style={{ marginRight: '12px', fontSize: '20px' }}>🏠</span>
                     Search on Airbnb
                   </button>
                   
@@ -1157,28 +1467,52 @@ export default function MapView() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      padding: '12px',
+                      padding: '14px',
                       backgroundColor: '#0066BB',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '15px',
+                      fontWeight: '500',
+                      boxShadow: '0 2px 6px rgba(0, 102, 187, 0.3)',
+                      transition: 'all 0.2s ease'
                     }}
                   >
-                    <span style={{ marginRight: '8px', fontSize: '20px' }}>✈️</span>
+                    <span style={{ marginRight: '12px', fontSize: '20px' }}>✈️</span>
                     Search on MakeMyTrip
                   </button>
                 </div>
                 
                 <div style={{
-                  marginTop: '20px',
-                  padding: '12px',
-                  backgroundColor: '#f5f7fa',
-                  borderRadius: '4px',
-                  fontSize: '14px'
+                  marginTop: '24px',
+                  padding: '16px',
+                  backgroundColor: '#f8fafc',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  border: '1px solid #e2e8f0'
                 }}>
-                  <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>Planning tips:</p>
-                  <ul style={{ margin: '0', paddingLeft: '20px' }}>
+                  <p style={{ 
+                    margin: '0 0 10px 0', 
+                    fontWeight: '600',
+                    color: '#334155',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    Planning tips:
+                  </p>
+                  <ul style={{ 
+                    margin: '0', 
+                    paddingLeft: '20px',
+                    color: '#475569',
+                    lineHeight: '1.5'
+                  }}>
                     <li>Book accommodations in advance during peak {selectedPlace.season} season</li>
                     <li>Check reviews for cleanliness and amenities</li>
                     <li>Consider properties within {userLoc ? haversine(userLoc[0], userLoc[1], selectedPlace.latitude, selectedPlace.longitude).toFixed(1) : 5} km of this attraction</li>
